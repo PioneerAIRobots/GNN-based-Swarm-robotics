@@ -8,11 +8,21 @@ Task allocation is driven by a **heterogeneous Graph Attention Network**, whose
 output is projected onto a conflict-free assignment by the **Hungarian
 algorithm**. Built on **ROS 2 Humble**, visualised in **RViz**.
 
+## Watch it run
+
+[![Watch the walkthrough](docs/media/video_poster.png)](drones_GNN.mp4)
+
+**▶ [drones_GNN.mp4](drones_GNN.mp4)** — full walkthrough in RViz (21 MB).
+Click the image above, or the link, to play it on GitHub.
+
+### Mission replay
+
 ![Mission replay](docs/media/mission.gif)
 
-*A complete recorded mission. Blue is the quadrotor, amber the UGV, green the
-quadruped. Rings are emitter-position uncertainty; ⊗ marks a neutralised
-emitter; the blue track is the civilian transmitter, correctly spared.*
+*A complete recorded mission, rendered from the system's own telemetry. Blue is
+the quadrotor, amber the UGV, green the quadruped. Rings are emitter-position
+uncertainty; ⊗ marks a neutralised emitter; the blue track is the civilian
+transmitter, correctly spared.*
 
 ---
 
