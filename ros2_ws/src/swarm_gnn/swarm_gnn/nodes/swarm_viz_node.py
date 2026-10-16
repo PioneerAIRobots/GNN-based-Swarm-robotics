@@ -501,8 +501,10 @@ class SwarmVizNode(Node):
             "mission", 0, Marker.TEXT_VIEW_FACING, Vector3(z=4.0), _c(1, 1, 1, 0.95)
         )
         m.pose.position = Point(x=0.0, y=0.0, z=34.0)
+        # A real separator, not the "===" this project uses in source comments:
+        # this string is rendered on screen and ends up in screen recordings.
         m.text = (
-            f"OPERATION SENTINEL GRID === {s.phase_name}\n"
+            f"OPERATION SENTINEL GRID \u2014 {s.phase_name}\n"
             f"t+{s.mission_time:.0f}s   coverage {s.coverage_fraction*100:.0f}%   "
             f"tasks {s.open_tasks}\n"
             f"threats: {s.threats_detected} detected / {s.threats_confirmed} confirmed "

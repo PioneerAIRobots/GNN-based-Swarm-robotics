@@ -483,40 +483,6 @@ def render_timeline(frames: list[dict], out: str) -> None:
     print("  phases.png")
 
 
-def render_poster(frames: list[dict], out: str) -> None:
-    """A clickable poster for the walkthrough video.
-
-    GitHub's markdown sanitiser strips <video>, so a repo-hosted clip cannot
-    play inline in a README. The pattern that does work is a still image
-    linked to the file: the image renders, and clicking it opens GitHub's own
-    player. This draws that still from the recording so the poster is a real
-    frame of the system rather than a stock graphic.
-    """
-    # A frame late enough to show results, early enough to still show motion.
-    frame = frames[int(len(frames) * 0.62)]
-    img = draw_frame(frame, size=760).convert("RGB")
-    d = ImageDraw.Draw(img, "RGBA")
-    w, h = img.size
-
-    # Dim the plan view so the play affordance reads clearly.
-    d.rectangle([0, 0, w, h - HUD_H], fill=(10, 12, 15, 110))
-
-    cx, cy, r = w // 2, (h - HUD_H) // 2, 58
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(20, 24, 30, 215),
-              outline=(236, 240, 246), width=3)
-    d.polygon([(cx - 17, cy - 27), (cx - 17, cy + 27), (cx + 28, cy)],
-              fill=(236, 240, 246))
-
-    f_title, f_sub = _font(27, True), _font(14)
-    d.text((cx, cy + r + 30), "Watch the walkthrough", font=f_title,
-           fill=(240, 244, 250), anchor="mm")
-    d.text((cx, cy + r + 58),
-           "full mission in RViz \u2014 search, localise, confirm, neutralise",
-           font=f_sub, fill=(176, 186, 200), anchor="mm")
-    img.save(out)
-    print("  video_poster.png")
-
-
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("recording")
@@ -539,7 +505,6 @@ def main() -> None:
     c.img.save(os.path.join(args.out, "sector.png"))
     print("  sector.png")
 
-    render_poster(frames, os.path.join(args.out, "video_poster.png"))
     render_pipeline(os.path.join(args.out, "pipeline.png"))
     render_timeline(frames, os.path.join(args.out, "phases.png"))
 

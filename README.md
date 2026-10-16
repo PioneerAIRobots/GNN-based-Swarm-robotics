@@ -10,22 +10,23 @@ algorithm**. Built on **ROS 2 Humble**, visualised in **RViz**.
 
 ## Watch it run
 
-[![Watch the walkthrough](docs/media/video_poster.png)](https://github.com/PioneerAIRobots/GNN-based-Swarm-robotics/raw/main/drones_GNN.mp4)
+![Walkthrough](docs/media/walkthrough.gif)
 
-**▶ [drones_GNN.mp4](https://github.com/PioneerAIRobots/GNN-based-Swarm-robotics/raw/main/drones_GNN.mp4)**
-— full walkthrough in RViz. 21 MB; GitHub will not preview a file this large,
-so the link downloads it rather than streaming it.
-
-The animation below needs no download and shows the same mission.
+*Live RViz capture of a full mission, time-lapsed ~6x. The opening oblique view
+shows the whole sector with the comms and bid graph the GNN is reasoning over;
+the camera then moves in among the platforms. Full-resolution original:
+**[drones_GNN.mp4](https://github.com/PioneerAIRobots/GNN-based-Swarm-robotics/raw/main/drones_GNN.mp4)**
+(21 MB download — GitHub will not preview a file that large, which is why the
+GIF is here).*
 
 ### Mission replay
 
 ![Mission replay](docs/media/mission.gif)
 
-*A complete recorded mission, rendered from the system's own telemetry. Blue is
-the quadrotor, amber the UGV, green the quadruped. Rings are emitter-position
-uncertainty; ⊗ marks a neutralised emitter; the blue track is the civilian
-transmitter, correctly spared.*
+*The same mission rendered from the system's own telemetry, in plan view. Blue
+is the quadrotor, amber the UGV, green the quadruped. Rings are
+emitter-position uncertainty; ⊗ marks a neutralised emitter; the blue track is
+the civilian transmitter, correctly spared.*
 
 ---
 
