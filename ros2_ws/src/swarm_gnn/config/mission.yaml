@@ -1,0 +1,157 @@
+# ============================================================================
+# OPERATION SENTINEL GRID === mission parameters
+#
+# Counter-RF / counter-IED sweep of a contested urban corridor by a
+# heterogeneous three-platform team, simulated kinematically and displayed in
+# RViz.
+#
+# The sector geometry, the emitter table and the insertion/rally points are
+# NOT here. They live in swarm_gnn/model/sector.py, which the planner, the
+# platforms, the threat field and the visualiser all read, and which
+# self-validates. They were previously duplicated across this file, a Gazebo
+# world and a launch file; the copies drifted and produced two real bugs.
+#
+# `use_sim_time`, `use_gnn` and `checkpoint` are also deliberately absent: a
+# ROS 2 parameter file takes precedence over a launch file's parameter dict, so
+# listing them here would silently pin them and override
+# `ros2 launch ... use_gnn:=false`. Those three belong to the launch files.
+# ============================================================================
+
+# ---------------------------------------------------------------- allocator
+gnn_allocator:
+  ros__parameters:
+    update_rate: 2.0
+    comms_range: 55.0
+    aerial_range_bonus: 35.0
+    task_cluster_range: 22.0
+    # Utility a new task must beat the held one by, to retask. Too low and the
+    # agents thrash and arrive nowhere; too high and they ignore better work.
+    switch_margin: 0.35
+    agent_timeout: 4.0
+    # Must match the UGV's marker_dispenser capacity in its xacro.
+    marker_capacity: 4
+    publish_graph_debug: true
+    log_every_n_ticks: 30
+
+# ------------------------------------------------------------- executive
+mission_executive:
+  ros__parameters:
+    update_rate: 2.0
+    expected_agents: ["drone_1", "ugv_1", "dog_1"]
+    # 16 m cells give 49 of them over the sector. At 11 m there were 100, and
+    # an 80% sweep was several hundred seconds of pure transit before any
+    # dwell or detour, so the mission could never finish.
+    search_cell_size: 16.0
+    sweep_radius: 10.0
+    # Above the tallest structure (26 m): the planner gives the drone straight
+    # lines, and the platform's collision test is height-aware, so a cruise
+    # among the rooftops means the aircraft flies into a block and stops.
+    cruise_altitude: 31.0
+    confirm_standoff: 9.0
+    sample_standoff: 2.2
+    max_concurrent_search_tasks: 9
+    # Fraction of *cells* that must be swept before egress, not weighted
+    # coverage. The two differ and the difference decided a mission: at a 0.92
+    # weighted target the team left with 42 of 49 cells swept, and the seven it
+    # skipped contained two of the three hostile emitters, which were never
+    # detected. An emitter is only found once somebody takes DF cuts near it,
+    # so the search guarantee is stated in cells.
+    coverage_target: 1.0
+    # Safety valve: egress and report what was not reached rather than staying
+    # in the sector indefinitely if some cell proves unsweepable.
+    max_mission_time: 1200.0
+    # Rules of engagement: only a confirmed jammer (1) or IED trigger (2) may
+    # be marked. Class 3 is a licensed civilian transmitter and is no-strike.
+    engageable_classes: [1, 2]
+
+# -------------------------------------------------------------- localiser
+rf_localizer:
+  ros__parameters:
+    update_rate: 2.0
+    sector_half_extent: 60.0
+    grid_resolution: 1.5
+    # The team does not know an emitter's transmit power. The four span
+    # 14-30 dBm, so this prior is wrong for most of them by design.
+    tx_power_prior_dbm: 22.0
+    # Prior uncertainty on that power, marginalised into the range term. Do
+    # not narrow it to make the filter look confident: a narrow value pins the
+    # posterior to the grid edge and reports confident fixes in the corners.
+    tx_power_sigma_db: 9.0
+    association_radius: 14.0
+    candidate_mass_threshold: 0.012
+    # Two distinct platforms must supply a bearing before a mode becomes a
+    # track: one platform cannot resolve range from a single vantage point.
+    min_observers_for_candidate: 2
+    # Peaks this close to the grid edge are truncation artifacts, not
+    # emitters; the real ones all lie well inside the sector.
+    edge_margin: 6.0
+    # Promotion to LOCALIZED: the refined fix must be at least this tight...
+    localized_sigma: 4.0
+    # ...and the cuts must span at least this baseline. See
+    # rf_localizer.multilaterate on geometric dilution of precision.
+    min_baseline: 10.0
+    belief_decay: 0.992
+    detection_memory: 240
+
+# --------------------------------------------------- RF / CBRN simulation
+threat_field:
+  ros__parameters:
+    update_rate: 4.0
+    agent_namespaces: ["drone_1", "ugv_1", "dog_1"]
+    agent_platforms: ["drone", "ugv", "quadruped"]
+    # Extra path loss per building the ray passes through.
+    occlusion_loss_db: 11.0
+    random_seed: 7
+
+# ------------------------------------------------------------ visualiser
+swarm_viz:
+  ros__parameters:
+    frame_id: "map"
+    publish_rate: 4.0
+    draw_search_tasks: true
+    draw_sector: true
+    # Attention below this is not drawn: a bid graph with 30 tasks is
+    # unreadable, and the point is to see what the network actually weights.
+    attention_floor: 0.08
+
+# ------------------------------------------------- per-agent controllers
+drone_1:
+  agent_controller:
+    ros__parameters:
+      agent_id: "drone_1"
+      platform: "drone"
+      control_rate: 10.0
+      state_rate: 5.0
+      cruise_altitude: 31.0
+      # The narrow LWIR cannot resolve a target from cruise, so the aircraft
+      # descends === but only once the target is underneath it.
+      confirm_altitude: 7.0
+      descend_radius: 14.0
+      dwell_time: 4.0
+      # Link quality below which the platform reports active jamming. This is
+      # the only measurement that separates a jammer from a licensed
+      # transmitter, and the drone takes it at the thermal standoff.
+      jam_threshold: 0.60
+      scan_topic: "scan"
+
+ugv_1:
+  agent_controller:
+    ros__parameters:
+      agent_id: "ugv_1"
+      platform: "ugv"
+      control_rate: 10.0
+      state_rate: 5.0
+      dwell_time: 4.0
+      scan_topic: "scan"
+
+dog_1:
+  agent_controller:
+    ros__parameters:
+      agent_id: "dog_1"
+      platform: "quadruped"
+      control_rate: 10.0
+      state_rate: 5.0
+      # The sampler needs a real dwell: a drive-by is not a sample.
+      dwell_time: 6.0
+      cbrn_threshold: 0.15
+      scan_topic: "scan"

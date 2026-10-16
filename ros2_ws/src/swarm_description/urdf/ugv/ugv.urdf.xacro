@@ -1,0 +1,176 @@
+<?xml version="1.0"?>
+<!-- ========================================================================
+     SENTINEL GRID / "MULE" - 4x4 skid-steer unmanned ground vehicle.
+
+     Mission role: sweeps the trafficable road network of the corridor, carries
+     the long-baseline RF direction-finding array (its 0.30 m baseline is the
+     most accurate DF on the team), acts as the mid-tier comms relay, and is the
+     only platform that can emplace a jammer-marker on a confirmed emitter.
+
+     Drive: swarm_gnn/kinematic_platform, with the wheels rolled from the
+     commanded speed.
+     ======================================================================== -->
+<robot name="ugv" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="prefix" default=""/>
+  <xacro:arg name="namespace" default="ugv_1"/>
+  <!-- Keep TF trees disjoint when several of these spawn in one world. -->
+  <xacro:arg name="tf_prefix" default="ugv_1"/>
+
+  <xacro:property name="ns" value="$(arg namespace)"/>
+  <xacro:property name="tfp" value="$(arg tf_prefix)"/>
+
+  <xacro:include filename="$(find swarm_description)/urdf/common/materials.xacro"/>
+  <xacro:include filename="$(find swarm_description)/urdf/common/inertia.xacro"/>
+  <xacro:include filename="$(find swarm_description)/urdf/common/sensors.xacro"/>
+
+  <!-- ============================= dimensions ============================ -->
+  <xacro:property name="chassis_x" value="0.92"/>
+  <xacro:property name="chassis_y" value="0.58"/>
+  <xacro:property name="chassis_z" value="0.24"/>
+  <xacro:property name="chassis_mass" value="28.0"/>
+
+  <xacro:property name="wheel_radius" value="0.165"/>
+  <xacro:property name="wheel_width" value="0.120"/>
+  <xacro:property name="wheel_mass" value="2.4"/>
+  <xacro:property name="wheelbase" value="0.620"/>
+  <xacro:property name="track" value="0.640"/>
+
+  <xacro:property name="mast_height" value="0.46"/>
+  <!-- Height of base_link above base_footprint.
+
+       base_footprint is by definition the ground-contact frame, so this is
+       fixed by the wheel geometry: the wheel joints sit at
+       -(chassis_z/2 + 0.045) below base_link, and a wheel centre must be
+       exactly wheel_radius above the contact patch, giving
+           chassis_z_offset = wheel_radius + 0.045
+       Measured: the vehicle settles with base_footprint at z = 0 and drives
+       straight (7.13 m in 8 s at a 1.5 m/s command, 0.0 deg of drift) and
+       pivots cleanly (80 deg in 5 s at 0.8 rad/s with 0.02 m of translation).
+
+       Adding chassis_z/2 here also yields valid tyre contact, but it pushes
+       base_footprint 0.12 m below the contact patch, so the frame stops
+       meaning what its name says and the vehicle reports z = -0.12 forever. -->
+  <xacro:property name="chassis_z_offset" value="${wheel_radius + 0.045}"/>
+
+  <!-- ============================== base ================================= -->
+  <!-- base_footprint sits on the ground plane; nav2 and the costmaps expect it. -->
+  <link name="base_footprint"/>
+
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${chassis_z_offset}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <geometry><box size="${chassis_x} ${chassis_y} ${chassis_z}"/></geometry>
+      <material name="olive_drab"/>
+    </visual>
+    <!-- Sloped glacis plate, forward. -->
+    <visual>
+      <origin xyz="${chassis_x/2 - 0.04} 0 ${chassis_z/2 - 0.02}" rpy="0 -0.6 0"/>
+      <geometry><box size="0.16 ${chassis_y - 0.04} 0.02"/></geometry>
+      <material name="coyote_tan"/>
+    </visual>
+    <collision>
+      <geometry><box size="${chassis_x} ${chassis_y} ${chassis_z}"/></geometry>
+    </collision>
+    <xacro:box_inertial mass="${chassis_mass}" x="${chassis_x}" y="${chassis_y}" z="${chassis_z}">
+      <!-- Battery and drivetrain sit low: deliberately low CoG for a skid-steer. -->
+      <origin xyz="0 0 -0.055"/>
+    </xacro:box_inertial>
+  </link>
+  <!-- Sensor mast. -->
+  <joint name="mast_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="mast_link"/>
+    <origin xyz="-0.12 0 ${chassis_z/2 + mast_height/2}" rpy="0 0 0"/>
+  </joint>
+  <link name="mast_link">
+    <visual>
+      <geometry><cylinder radius="0.035" length="${mast_height}"/></geometry>
+      <material name="gunmetal"/>
+    </visual>
+    <collision><geometry><cylinder radius="0.035" length="${mast_height}"/></geometry></collision>
+    <xacro:cylinder_inertial mass="1.1" radius="0.035" length="${mast_height}">
+      <origin xyz="0 0 0"/>
+    </xacro:cylinder_inertial>
+  </link>
+  <!-- ============================== wheels ================================ -->
+  <xacro:macro name="ugv_wheel" params="name x y">
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}_wheel_link"/>
+      <origin xyz="${x} ${y} ${-chassis_z/2 - 0.045}" rpy="${-pi/2} 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit effort="90.0" velocity="22.0"/>
+      <dynamics damping="0.08" friction="0.5"/>
+    </joint>
+    <link name="${name}_wheel_link">
+      <visual>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="matte_black"/>
+      </visual>
+      <!-- Hub, so the wheel rolling is actually visible in RViz. -->
+      <visual>
+        <origin xyz="0 0 ${wheel_width/2 + 0.002}"/>
+        <geometry><box size="${wheel_radius*1.1} 0.03 0.006"/></geometry>
+        <material name="coyote_tan"/>
+      </visual>
+      <collision>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+      <!-- The wheels carry collision geometry and friction because they
+           genuinely propel this vehicle.
+
+           A long detour concluded otherwise and was wrong. Every measurement
+           suggesting the tyres could not move the hull === 0.15 m of travel in
+           8 s, yaw without translation === was taken with the UGV spawned at
+           (-52, -52), which is *inside* a building footprint, facing 45
+           degrees into the wall. Driving the other way covered 6.99 m with
+           0.9 degrees of drift. The spawn points are now validated by
+           tools/check_layout.py. -->
+      <xacro:wheel_inertial mass="${wheel_mass}" radius="${wheel_radius}" width="${wheel_width}">
+        <origin xyz="0 0 0"/>
+      </xacro:wheel_inertial>
+    </link>
+  </xacro:macro>
+
+  <xacro:ugv_wheel name="front_left"  x="${wheelbase/2}"  y="${track/2}"/>
+  <xacro:ugv_wheel name="front_right" x="${wheelbase/2}"  y="${-track/2}"/>
+  <xacro:ugv_wheel name="rear_left"   x="${-wheelbase/2}" y="${track/2}"/>
+  <xacro:ugv_wheel name="rear_right"  x="${-wheelbase/2}" y="${-track/2}"/>
+
+  <!-- ============================== sensors =============================== -->
+  <!-- Hull-line 2D scanner for local obstacle avoidance / potential fields. -->
+  <xacro:lidar_2d prefix="lidar" parent="base_link"
+                  xyz="${chassis_x/2 - 0.06} 0 ${chassis_z/2 + 0.045}"
+                  samples="720" range_max="30.0" rate="15.0"/>
+
+  <!-- Mast-top 3D scanner: building faces and rubble, for the shared map. -->
+  <xacro:lidar_3d prefix="lidar3d" parent="mast_link"
+                  xyz="0 0 ${mast_height/2 + 0.05}"
+                  h_samples="360" v_samples="16" range_max="40.0" rate="10.0"/>
+
+  <xacro:camera_rgb prefix="front_camera" parent="base_link"
+                    xyz="${chassis_x/2 - 0.005} 0 ${chassis_z/2 - 0.01}"
+                    hfov="1.5708" width="640" height="480" rate="20.0"/>
+
+  <xacro:imu_sensor prefix="imu" parent="base_link" xyz="0 0 0.02" rate="100.0"/>
+
+  <xacro:gnss_sensor prefix="gnss" parent="mast_link"
+                     xyz="0 0 ${mast_height/2 + 0.012}" noise="0.9"/>
+
+  <!-- The team's reference DF array: 4 elements on a 0.30 m baseline. -->
+  <xacro:rf_df_array prefix="rf_df" parent="base_link"
+                     xyz="-0.30 0 ${chassis_z/2 + 0.01}"
+                     elements="4" baseline="0.30" mast="0.34"
+                     band_mhz="433.0" sensitivity_dbm="-112.0"/>
+
+  <xacro:marker_dispenser prefix="dispenser" parent="base_link"
+                          xyz="-0.10 0 ${-chassis_z/2 - 0.045}" capacity="4"/>
+
+  <!-- ============================= plugins ================================ -->
+</robot>

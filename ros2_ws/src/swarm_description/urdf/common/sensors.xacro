@@ -1,0 +1,283 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- ======================================================================
+       Mission sensor library.
+
+       Every macro creates a real link (so it has mass, shows in RViz and
+       
+         * the RF direction-finding array  (rf_df_array)
+         * the CBRN point sampler          (cbrn_sampler)
+       For those, the macros build the physical antenna/intake geometry and tag
+       the link with a <swarm:sensor> annotation; the propagation and plume
+       physics are simulated in swarm_gnn's threat_field node, which reads the
+       link pose from TF. The geometry is not decorative == the DF baseline
+       between elements is what sets the bearing accuracy used by the localiser.
+       ====================================================================== -->
+  <xacro:include filename="$(find swarm_description)/urdf/common/inertia.xacro"/>
+
+  <!-- ===================== 2D scanning LiDAR ============================= -->
+  <xacro:macro name="lidar_2d" params="prefix parent xyz rpy:='0 0 0'
+                                       samples:=720 range_max:=30.0 rate:=15.0
+                                       min_angle:=${-pi} max_angle:=${pi}">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><cylinder radius="0.038" length="0.055"/></geometry>
+        <material name="matte_black"/>
+      </visual>
+      <visual>
+        <origin xyz="0 0 0.034"/>
+        <geometry><cylinder radius="0.030" length="0.014"/></geometry>
+        <material name="sensor_glass"/>
+      </visual>
+      <collision><geometry><cylinder radius="0.038" length="0.055"/></geometry></collision>
+      <xacro:cylinder_inertial mass="0.18" radius="0.038" length="0.055">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+  </xacro:macro>
+
+  <!-- =============== 3D LiDAR (tilted multi-layer scanner) =============== -->
+  <xacro:macro name="lidar_3d" params="prefix parent xyz rpy:='0 0 0'
+                                       h_samples:=360 v_samples:=16 range_max:=40.0 rate:=10.0">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><cylinder radius="0.045" length="0.072"/></geometry>
+        <material name="gunmetal"/>
+      </visual>
+      <collision><geometry><cylinder radius="0.045" length="0.072"/></geometry></collision>
+      <xacro:cylinder_inertial mass="0.42" radius="0.045" length="0.072">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+  </xacro:macro>
+
+  <!-- ========================= RGB camera =============================== -->
+  <xacro:macro name="camera_rgb" params="prefix parent xyz rpy:='0 0 0'
+                                         width:=640 height:=480 hfov:=1.3962
+                                         rate:=20.0 topic:=image_raw">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><box size="0.028 0.090 0.028"/></geometry>
+        <material name="matte_black"/>
+      </visual>
+      <visual>
+        <origin xyz="0.016 0 0"/>
+        <geometry><cylinder radius="0.011" length="0.006"/></geometry>
+        <origin rpy="0 ${pi/2} 0" xyz="0.016 0 0"/>
+        <material name="sensor_glass"/>
+      </visual>
+      <collision><geometry><box size="0.028 0.090 0.028"/></geometry></collision>
+      <xacro:box_inertial mass="0.09" x="0.028" y="0.090" z="0.028">
+        <origin xyz="0 0 0"/>
+      </xacro:box_inertial>
+    </link>
+    <!-- REP-103 optical frame: z forward, x right, y down. -->
+    <joint name="${prefix}_optical_joint" type="fixed">
+      <parent link="${prefix}_link"/>
+      <child link="${prefix}_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+    <link name="${prefix}_optical_frame"/>
+  </xacro:macro>
+
+  <!-- ===================== Uncooled LWIR thermal ========================= -->
+  <!-- Uncooled LWIR. Described by its real optics === a narrow 24 degree FOV
+       at 320x256 === because that is what forces the mission plan to spend a
+       close, slow overflight on a thermal confirm rather than reading it off
+       the wide-FOV search sweep. -->
+  <xacro:macro name="camera_thermal" params="prefix parent xyz rpy:='0 0 0'
+                                             width:=320 height:=256 rate:=9.0">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><cylinder radius="0.021" length="0.046"/></geometry>
+        <origin rpy="0 ${pi/2} 0"/>
+        <material name="gunmetal"/>
+      </visual>
+      <collision>
+        <geometry><cylinder radius="0.021" length="0.046"/></geometry>
+        <origin rpy="0 ${pi/2} 0"/>
+      </collision>
+      <xacro:cylinder_inertial mass="0.07" radius="0.021" length="0.046">
+        <origin rpy="0 ${pi/2} 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+    <joint name="${prefix}_optical_joint" type="fixed">
+      <parent link="${prefix}_link"/>
+      <child link="${prefix}_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+    <link name="${prefix}_optical_frame"/>
+  </xacro:macro>
+
+  <!-- ============================= IMU ================================== -->
+  <xacro:macro name="imu_sensor" params="prefix parent xyz rpy:='0 0 0' rate:=100.0">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><box size="0.022 0.022 0.007"/></geometry>
+        <material name="hazard_amber"/>
+      </visual>
+      <xacro:box_inertial mass="0.012" x="0.022" y="0.022" z="0.007">
+        <origin xyz="0 0 0"/>
+      </xacro:box_inertial>
+    </link>
+  </xacro:macro>
+
+  <!-- ===================== GNSS (degraded / jammable) ==================== -->
+  <!-- The mission premise is a GNSS-contested corridor, so the noise here is
+       deliberately coarse: the swarm has to fall back on relative localisation
+       through the comms graph when an emitter is active nearby. -->
+  <xacro:macro name="gnss_sensor" params="prefix parent xyz rate:=5.0 noise:=0.9">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><cylinder radius="0.030" length="0.012"/></geometry>
+        <material name="antenna_white"/>
+      </visual>
+      <xacro:cylinder_inertial mass="0.045" radius="0.030" length="0.012">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+  </xacro:macro>
+
+  <!-- ================ RF direction-finding antenna array ================= -->
+  <!-- `elements` monopoles on a circle of radius `baseline`. The array factor
+       (baseline / wavelength) sets the achievable bearing variance, which the
+       threat_field node reads off this annotation == so making the array
+       smaller genuinely degrades the localisation the GNN depends on. -->
+  <xacro:macro name="rf_df_array" params="prefix parent xyz elements:=4
+                                          baseline:=0.18 mast:=0.22
+                                          band_mhz:=433.0 sensitivity_dbm:=-105.0">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+    </joint>
+    <link name="${prefix}_link">
+      <!-- Ground plane the monopoles stand on. -->
+      <visual>
+        <geometry><cylinder radius="${baseline + 0.04}" length="0.008"/></geometry>
+        <material name="gunmetal"/>
+      </visual>
+      <collision>
+        <geometry><cylinder radius="${baseline + 0.04}" length="0.008"/></geometry>
+      </collision>
+      <xacro:cylinder_inertial mass="0.20" radius="${baseline + 0.04}" length="0.008">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+
+    <xacro:macro name="_df_element" params="i">
+      <joint name="${prefix}_el${i}_joint" type="fixed">
+        <parent link="${prefix}_link"/>
+        <child link="${prefix}_el${i}_link"/>
+        <origin xyz="${baseline * cos(2.0 * pi * i / elements)}
+                     ${baseline * sin(2.0 * pi * i / elements)}
+                     ${mast / 2.0 + 0.004}" rpy="0 0 0"/>
+      </joint>
+      <link name="${prefix}_el${i}_link">
+        <visual>
+          <geometry><cylinder radius="0.0045" length="${mast}"/></geometry>
+          <material name="antenna_white"/>
+        </visual>
+        <xacro:cylinder_inertial mass="0.015" radius="0.0045" length="${mast}">
+          <origin xyz="0 0 0"/>
+        </xacro:cylinder_inertial>
+      </link>
+    </xacro:macro>
+
+    <xacro:_df_element i="0"/>
+    <xacro:_df_element i="1"/>
+    <xacro:if value="${elements &gt;= 3}"><xacro:_df_element i="2"/></xacro:if>
+    <xacro:if value="${elements &gt;= 4}"><xacro:_df_element i="3"/></xacro:if>
+    <xacro:if value="${elements &gt;= 5}"><xacro:_df_element i="4"/></xacro:if>
+    <xacro:if value="${elements &gt;= 6}"><xacro:_df_element i="5"/></xacro:if>
+
+    <!-- These numbers are read by swarm_gnn/threat_field_node, which supplies
+         the propagation physics; the baseline below sets the bearing variance. -->
+  </xacro:macro>
+
+  <!-- ====================== CBRN point sampler =========================== -->
+  <!-- Pumped intake with a short standoff: a sample is only valid within
+       `standoff` metres, which is exactly why the mission plan hands this task
+       to the quadruped and not to the drone. -->
+  <xacro:macro name="cbrn_sampler" params="prefix parent xyz rpy:='0 0 0'
+                                           standoff:=2.5 detect_threshold:=0.15">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><box size="0.070 0.048 0.048"/></geometry>
+        <material name="hazard_amber"/>
+      </visual>
+      <!-- Intake snorkel. -->
+      <visual>
+        <origin xyz="0.046 0 -0.010" rpy="0 ${pi/2} 0"/>
+        <geometry><cylinder radius="0.008" length="0.040"/></geometry>
+        <material name="matte_black"/>
+      </visual>
+      <collision><geometry><box size="0.070 0.048 0.048"/></geometry></collision>
+      <xacro:box_inertial mass="0.26" x="0.070" y="0.048" z="0.048">
+        <origin xyz="0 0 0"/>
+      </xacro:box_inertial>
+    </link>
+  </xacro:macro>
+
+  <!-- ================= Jammer-marker dispenser (UGV) ===================== -->
+  <!-- Carries `capacity` expendable RF markers. Emplacing one is the mission's
+       terminal action on a confirmed emitter; the count is a hard resource
+       constraint the allocator has to respect. -->
+  <xacro:macro name="marker_dispenser" params="prefix parent xyz capacity:=4">
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}_link"/>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+    </joint>
+    <link name="${prefix}_link">
+      <visual>
+        <geometry><box size="0.130 0.110 0.090"/></geometry>
+        <material name="olive_drab"/>
+      </visual>
+      <visual>
+        <origin xyz="0 0 -0.050"/>
+        <geometry><cylinder radius="0.030" length="0.014"/></geometry>
+        <material name="signal_red"/>
+      </visual>
+      <collision><geometry><box size="0.130 0.110 0.090"/></geometry></collision>
+      <xacro:box_inertial mass="${0.6 + 0.25 * capacity}" x="0.130" y="0.110" z="0.090">
+        <origin xyz="0 0 0"/>
+      </xacro:box_inertial>
+    </link>
+  </xacro:macro>
+</robot>

@@ -1,0 +1,168 @@
+# OPERATION SENTINEL GRID === operator display.
+#
+# RViz is the whole visualisation here; there is no simulator GUI. Everything
+# shown is something the system genuinely holds:
+#   Sector       the buildings, routes and rally points the planner searches
+#   SwarmMarkers agents, the GNN's own graph edges with attention as width,
+#                open tasks, and threat tracks with their uncertainty ellipses
+#   RFBelief     the recursive Bayesian posterior over emitter position
+#   Drone/UGV/Dog the full articulated URDFs, joints animated from cmd_vel
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /SwarmMarkers1
+      Splitter Ratio: 0.5
+    Tree Height: 660
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 10
+      Plane Cell Count: 12
+      Color: 60; 64; 70
+      Alpha: 0.3
+      Reference Frame: map
+
+    # The sector, the swarm and the coordination graph all arrive here. Its
+    # sub-namespaces (sector / agents / comms / bids / assignments / tasks /
+    # threats / mission) can be toggled once the display is selected.
+    - Class: rviz_default_plugins/MarkerArray
+      Name: SwarmMarkers
+      Enabled: true
+      Topic:
+        Value: /swarm/markers
+        Depth: 2
+        Durability Policy: Volatile
+        Reliability Policy: Reliable
+
+    # The emitter-position posterior. Watching it sharpen as the team spreads
+    # its DF baseline is the clearest view of why triangulation tasks exist.
+    # Off by default: RViz's Map display cannot render an OccupancyGrid on
+    # OpenGL 2.1, so swarm_viz also draws the posterior as markers (the
+    # `belief` namespace of SwarmMarkers). Enable this instead on hardware
+    # with a newer GL, where the heatmap is crisper.
+    - Class: rviz_default_plugins/Map
+      Name: RFBelief
+      Enabled: false
+      Alpha: 0.55
+      # `raw` rather than `costmap`. The costmap and map schemes go through
+      # RViz's indexed-8-bit image shader, which fails to link on OpenGL 2.1 /
+      # GLSL 1.2 ("active samplers with a different type refer to the same
+      # texture image unit") and leaves the grid invisible on machines with
+      # that GL version, including this one. `raw` uses a different path.
+      Color Scheme: raw
+      Draw Behind: true
+      Topic:
+        Value: /swarm/belief_grid
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+
+    - Class: rviz_default_plugins/RobotModel
+      Name: Drone
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /drone_1/robot_description
+        Depth: 5
+        Durability Policy: Transient Local
+      TF Prefix: drone_1
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1
+    - Class: rviz_default_plugins/RobotModel
+      Name: UGV
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /ugv_1/robot_description
+        Depth: 5
+        Durability Policy: Transient Local
+      TF Prefix: ugv_1
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1
+    - Class: rviz_default_plugins/RobotModel
+      Name: Quadruped
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /dog_1/robot_description
+        Depth: 5
+        Durability Policy: Transient Local
+      TF Prefix: dog_1
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1
+
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: false
+      Marker Scale: 2
+      Show Arrows: false
+      Show Axes: true
+      Show Names: false
+
+    # The synthetic scans each ground platform navigates on. Off by default:
+    # useful for seeing what a robot sees, noisy while watching the mission.
+    - Class: rviz_default_plugins/LaserScan
+      Name: UGV_scan
+      Enabled: false
+      Size (m): 0.3
+      Style: Spheres
+      Color Transformer: FlatColor
+      Color: 255; 200; 60
+      Topic:
+        Value: /ugv_1/scan
+        Depth: 5
+        Reliability Policy: Best Effort
+    - Class: rviz_default_plugins/LaserScan
+      Name: Dog_scan
+      Enabled: false
+      Size (m): 0.25
+      Style: Spheres
+      Color Transformer: FlatColor
+      Color: 120; 240; 120
+      Topic:
+        Value: /dog_1/scan
+        Depth: 5
+        Reliability Policy: Best Effort
+
+  Global Options:
+    Background Color: 28; 30; 34
+    Fixed Frame: map
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      # Top-down on the whole sector: the mission is a plan-view problem.
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: SectorMap
+      Scale: 7
+      Target Frame: map
+      X: 0
+      Y: 0
+      Angle: 0
+    Saved:
+      - Class: rviz_default_plugins/Orbit
+        Name: Oblique
+        Distance: 170
+        Focal Point: {X: 0, Y: 0, Z: 0}
+        Pitch: 0.7
+        Yaw: 0.8
+        Target Frame: map
+Window Geometry:
+  Height: 1000
+  Width: 1700
+  Displays: {collapsed: false}
+  Views: {collapsed: true}

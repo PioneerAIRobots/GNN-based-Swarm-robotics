@@ -1,0 +1,229 @@
+<?xml version="1.0"?>
+<!-- ========================================================================
+     SENTINEL GRID / "HOUND" === 12-DOF quadruped dismount.
+
+     Mission role: the close-in platform. Goes where the UGV cannot === stairwells,
+     rubble, narrow alleys off the main corridor === and is the only platform
+     carrying the CBRN point sampler, which needs a 2.5 m standoff to read. It
+     also takes the short-baseline DF cuts from inside the urban clutter that
+     the drone cannot get through rooftops.
+
+     12 actuated joints: 4 legs x (hip_roll, hip_pitch, knee).
+     Locomotion: swarm_gnn/kinematic_platform moves the trunk at stance
+     height and drives all 12 leg joints as a trot from the same velocity
+     command, so the gait always matches the commanded motion and the dog
+     stands still while holding station. A locomotion abstraction on
+     purpose: the research question is swarm coordination, not balance.
+     ======================================================================== -->
+<robot name="quadruped" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="namespace" default="dog_1"/>
+  <xacro:arg name="tf_prefix" default="dog_1"/>
+
+  <xacro:property name="ns" value="$(arg namespace)"/>
+  <xacro:property name="tfp" value="$(arg tf_prefix)"/>
+
+  <xacro:include filename="$(find swarm_description)/urdf/common/materials.xacro"/>
+  <xacro:include filename="$(find swarm_description)/urdf/common/inertia.xacro"/>
+  <xacro:include filename="$(find swarm_description)/urdf/common/sensors.xacro"/>
+
+  <!-- ============================ dimensions ============================= -->
+  <xacro:property name="trunk_x" value="0.62"/>
+  <xacro:property name="trunk_y" value="0.19"/>
+  <xacro:property name="trunk_z" value="0.14"/>
+  <xacro:property name="trunk_mass" value="11.5"/>
+
+  <xacro:property name="hip_offset_x" value="0.235"/>
+  <xacro:property name="hip_offset_y" value="0.0975"/>
+
+  <xacro:property name="thigh_length" value="0.22"/>
+  <xacro:property name="thigh_mass" value="1.05"/>
+  <xacro:property name="shank_length" value="0.22"/>
+  <xacro:property name="shank_mass" value="0.26"/>
+  <xacro:property name="foot_radius" value="0.028"/>
+
+  <!-- Nominal trunk height above the ground-contact frame.
+       Not a free parameter: it is the foot reach of the stance pose that
+       kinematic_platform holds (stance_hip 0.42 rad, stance_knee -0.95 rad),
+       so the feet touch the ground exactly when base_footprint sits at z=0.
+           thigh  0.22*cos(0.42)              = 0.2009
+           shank  0.22*cos(0.42-0.95)         = 0.1898
+           foot radius                        = 0.028
+                                         total  0.4187
+       Change either stance angle and this must be recomputed, or the dog
+       floats / drags its feet through the ground plane. -->
+  <xacro:property name="stance_height" value="0.419"/>
+
+  <link name="base_footprint"/>
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${stance_height}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ============================== trunk ================================ -->
+  <link name="base_link">
+    <visual>
+      <geometry><box size="${trunk_x} ${trunk_y} ${trunk_z}"/></geometry>
+      <material name="matte_black"/>
+    </visual>
+    <!-- Payload deck on top: sampler, radio, DF array all bolt here. -->
+    <visual>
+      <origin xyz="-0.06 0 ${trunk_z/2 + 0.014}"/>
+      <geometry><box size="0.30 ${trunk_y - 0.02} 0.028"/></geometry>
+      <material name="olive_drab"/>
+    </visual>
+    <!-- Sensor head, forward. -->
+    <visual>
+      <origin xyz="${trunk_x/2 + 0.035} 0 0.030" rpy="0 0 0"/>
+      <geometry><box size="0.090 0.130 0.090"/></geometry>
+      <material name="gunmetal"/>
+    </visual>
+    <collision>
+      <geometry><box size="${trunk_x} ${trunk_y} ${trunk_z}"/></geometry>
+    </collision>
+    <xacro:box_inertial mass="${trunk_mass}" x="${trunk_x}" y="${trunk_y}" z="${trunk_z}">
+      <origin xyz="0 0 0"/>
+    </xacro:box_inertial>
+  </link>
+  <!-- =============================== leg ================================= -->
+  <!-- `side` is +1 for a left leg and -1 for a right one; it mirrors the hip
+       roll limits and the abduction sense so both sides splay outward. -->
+  <xacro:macro name="leg" params="name x y side">
+
+    <!-- ~~~ hip roll (abduction/adduction, about the body x axis) ~~~ -->
+    <joint name="${name}_hip_roll" type="revolute">
+      <parent link="base_link"/>
+      <child link="${name}_hip_link"/>
+      <origin xyz="${x} ${y} 0" rpy="0 0 0"/>
+      <axis xyz="1 0 0"/>
+      <limit lower="${-0.80}" upper="${0.80}" effort="34.0" velocity="21.0"/>
+      <dynamics damping="0.03" friction="0.08"/>
+    </joint>
+    <link name="${name}_hip_link">
+      <visual>
+        <origin xyz="0 ${side * 0.030} 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="0.044" length="0.062"/></geometry>
+        <material name="coyote_tan"/>
+      </visual>
+      <collision>
+        <origin xyz="0 ${side * 0.030} 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="0.044" length="0.062"/></geometry>
+      </collision>
+      <xacro:cylinder_inertial mass="0.68" radius="0.044" length="0.062">
+        <origin xyz="0 ${side * 0.030} 0" rpy="${pi/2} 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+    <!-- ~~~ hip pitch (swings the thigh fore/aft, about the body y axis) ~~~ -->
+    <joint name="${name}_hip_pitch" type="revolute">
+      <parent link="${name}_hip_link"/>
+      <child link="${name}_thigh_link"/>
+      <origin xyz="0 ${side * 0.062} 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-1.05}" upper="${2.10}" effort="34.0" velocity="21.0"/>
+      <dynamics damping="0.03" friction="0.08"/>
+    </joint>
+    <link name="${name}_thigh_link">
+      <visual>
+        <origin xyz="0 0 ${-thigh_length/2}"/>
+        <geometry><box size="0.050 0.038 ${thigh_length}"/></geometry>
+        <material name="matte_black"/>
+      </visual>
+      <!-- Knee actuator housing. -->
+      <visual>
+        <origin xyz="0 ${side * 0.026} 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="0.034" length="0.044"/></geometry>
+        <material name="coyote_tan"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-thigh_length/2}"/>
+        <geometry><box size="0.050 0.038 ${thigh_length}"/></geometry>
+      </collision>
+      <xacro:box_inertial mass="${thigh_mass}" x="0.050" y="0.038" z="${thigh_length}">
+        <!-- Mass is biased up toward the actuator, as on a real leg. -->
+        <origin xyz="0 0 ${-thigh_length * 0.38}"/>
+      </xacro:box_inertial>
+    </link>
+    <!-- ~~~ knee (shank flexion; negative only, knees bend one way) ~~~ -->
+    <joint name="${name}_knee" type="revolute">
+      <parent link="${name}_thigh_link"/>
+      <child link="${name}_shank_link"/>
+      <origin xyz="0 0 ${-thigh_length}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-2.60}" upper="${-0.10}" effort="34.0" velocity="21.0"/>
+      <dynamics damping="0.03" friction="0.08"/>
+    </joint>
+    <link name="${name}_shank_link">
+      <visual>
+        <origin xyz="0 0 ${-shank_length/2}"/>
+        <geometry><cylinder radius="0.016" length="${shank_length}"/></geometry>
+        <material name="gunmetal"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-shank_length/2}"/>
+        <geometry><cylinder radius="0.016" length="${shank_length}"/></geometry>
+      </collision>
+      <xacro:cylinder_inertial mass="${shank_mass}" radius="0.016" length="${shank_length}">
+        <origin xyz="0 0 ${-shank_length * 0.42}"/>
+      </xacro:cylinder_inertial>
+    </link>
+    <!-- ~~~ foot (compliant rubber pad; the only link that touches ground) ~~~ -->
+    <joint name="${name}_foot_joint" type="fixed">
+      <parent link="${name}_shank_link"/>
+      <child link="${name}_foot_link"/>
+      <origin xyz="0 0 ${-shank_length}" rpy="0 0 0"/>
+    </joint>
+    <link name="${name}_foot_link">
+      <visual>
+        <geometry><sphere radius="${foot_radius}"/></geometry>
+        <material name="matte_black"/>
+      </visual>
+      <collision>
+        <geometry><sphere radius="${foot_radius}"/></geometry>
+      </collision>
+      <xacro:sphere_inertial mass="0.06" radius="${foot_radius}">
+        <origin xyz="0 0 0"/>
+      </xacro:sphere_inertial>
+    </link>
+    <!-- Foot contact sensor: the gait and the stair-climb check both use it. -->
+  </xacro:macro>
+
+  <!-- Leg naming is load-bearing: kinematic_platform looks up
+       {fl,fr,rl,rr}_{hip_roll,hip_pitch,knee} by exactly these names. -->
+  <xacro:leg name="fl" x="${hip_offset_x}"  y="${hip_offset_y}"  side="1"/>
+  <xacro:leg name="fr" x="${hip_offset_x}"  y="${-hip_offset_y}" side="-1"/>
+  <xacro:leg name="rl" x="${-hip_offset_x}" y="${hip_offset_y}"  side="1"/>
+  <xacro:leg name="rr" x="${-hip_offset_x}" y="${-hip_offset_y}" side="-1"/>
+
+  <!-- ============================== sensors ============================== -->
+  <!-- Head camera: the close-in confirm sensor, under a doorway or over rubble. -->
+  <xacro:camera_rgb prefix="head_camera" parent="base_link"
+                    xyz="${trunk_x/2 + 0.082} 0 0.042" hfov="1.3963"
+                    width="640" height="480" rate="20.0"/>
+
+  <!-- Low, wide 2D scan for alley navigation and doorway detection. -->
+  <xacro:lidar_2d prefix="lidar" parent="base_link"
+                  xyz="${trunk_x/2 + 0.010} 0 ${trunk_z/2 + 0.030}"
+                  samples="540" range_max="18.0" rate="15.0"
+                  min_angle="${-2.35}" max_angle="${2.35}"/>
+
+  <xacro:imu_sensor prefix="imu" parent="base_link" xyz="0 0 0.0" rate="200.0"/>
+
+  <!-- GNSS is near-useless in the alleys this platform works; carried for the
+       ingress leg only, and weighted down hard by the localiser. -->
+  <xacro:gnss_sensor prefix="gnss" parent="base_link"
+                     xyz="-0.20 0 ${trunk_z/2 + 0.030}" noise="1.8"/>
+
+  <!-- The mission-unique payload: nothing else on the team can sample. -->
+  <xacro:cbrn_sampler prefix="cbrn" parent="base_link"
+                      xyz="${trunk_x/2 + 0.020} 0 ${-trunk_z/2 - 0.010}"
+                      standoff="2.5" detect_threshold="0.15"/>
+
+  <!-- Compact DF array on the payload deck: poor baseline, excellent access. -->
+  <xacro:rf_df_array prefix="rf_df" parent="base_link"
+                     xyz="-0.14 0 ${trunk_z/2 + 0.030}"
+                     elements="4" baseline="0.075" mast="0.120"
+                     band_mhz="433.0" sensitivity_dbm="-108.0"/>
+
+  <!-- ============================== plugins ============================== -->
+</robot>

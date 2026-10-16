@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<package format="3">
+  <name>swarm_gnn</name>
+  <version>1.0.0</version>
+  <description>
+    OPERATION SENTINEL GRID: GNN-based task coordination for a heterogeneous
+    drone / UGV / quadruped team. Contains the heterogeneous graph attention
+    network, the Hungarian assignment solver, the Bayesian RF emitter localiser,
+    the Lloyd coverage planner and the ROS 2 mission nodes.
+  </description>
+  <maintainer email="platformanalytics23@gmail.com">khan</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>swarm_interfaces</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <!-- torch is pip-installed, not a rosdep key; see README for the version. -->
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

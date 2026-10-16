@@ -1,0 +1,240 @@
+<?xml version="1.0"?>
+<!-- ========================================================================
+     SENTINEL GRID / "RECON" === quadrotor ISR platform.
+
+     Mission role: the only platform with wide-area look. Flies the coarse
+     Lloyd/Voronoi coverage sweep at altitude, drops to a slow low pass for
+     thermal confirmation of a candidate emitter, holds station as the top-tier
+     comms relay when the ground pair breaks line of sight, and flies the final
+     battle-damage assessment pass to verify an emitter has gone silent.
+
+     Flight: swarm_gnn/kinematic_platform integrates the commanded velocity
+     as a stabilised-flight abstraction (velocity in, attitude not modelled)
+     and animates the rotor joints and gimbal from the same command, so what
+     RViz shows always matches what the coordination layer asked for.
+     ======================================================================== -->
+<robot name="drone" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="namespace" default="drone_1"/>
+  <xacro:arg name="tf_prefix" default="drone_1"/>
+  <xacro:arg name="cruise_altitude" default="14.0"/>
+  <!-- When false the controller owns z directly, which is what the confirm and
+       BDA tasks need; when true the plugin pins the aircraft at cruise. -->
+  <xacro:arg name="hold_altitude" default="false"/>
+
+  <xacro:property name="ns" value="$(arg namespace)"/>
+  <xacro:property name="tfp" value="$(arg tf_prefix)"/>
+
+  <xacro:include filename="$(find swarm_description)/urdf/common/materials.xacro"/>
+  <xacro:include filename="$(find swarm_description)/urdf/common/inertia.xacro"/>
+  <xacro:include filename="$(find swarm_description)/urdf/common/sensors.xacro"/>
+
+  <!-- ============================ dimensions ============================= -->
+  <xacro:property name="body_x" value="0.230"/>
+  <xacro:property name="body_y" value="0.230"/>
+  <xacro:property name="body_z" value="0.085"/>
+  <xacro:property name="body_mass" value="1.35"/>
+
+  <xacro:property name="arm_length" value="0.235"/>
+  <xacro:property name="arm_radius" value="0.011"/>
+  <xacro:property name="arm_mass" value="0.055"/>
+
+  <xacro:property name="rotor_radius" value="0.127"/>
+  <xacro:property name="rotor_mass" value="0.022"/>
+  <!-- 45 deg arms: an X-configuration quad. -->
+  <xacro:property name="arm_sweep" value="${pi/4}"/>
+
+  <link name="base_footprint"/>
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- =============================== body ================================ -->
+  <link name="base_link">
+    <visual>
+      <geometry><box size="${body_x} ${body_y} ${body_z}"/></geometry>
+      <material name="matte_black"/>
+    </visual>
+    <!-- Canopy, forward, so heading is unambiguous on screen. -->
+    <visual>
+      <origin xyz="${body_x/2 - 0.015} 0 ${body_z/2}"/>
+      <geometry><box size="0.055 0.080 0.030"/></geometry>
+      <material name="coyote_tan"/>
+    </visual>
+    <!-- Battery pack slung underneath. -->
+    <visual>
+      <origin xyz="-0.015 0 ${-body_z/2 - 0.016}"/>
+      <geometry><box size="0.115 0.075 0.030"/></geometry>
+      <material name="gunmetal"/>
+    </visual>
+    <collision>
+      <geometry><box size="${body_x} ${body_y} ${body_z}"/></geometry>
+    </collision>
+    <xacro:box_inertial mass="${body_mass}" x="${body_x}" y="${body_y}" z="${body_z}">
+      <origin xyz="0 0 0"/>
+    </xacro:box_inertial>
+  </link>
+  <!-- ====================== arms, rotors and legs ======================== -->
+  <!-- `spin` is the rotor's sense of rotation: adjacent rotors counter-rotate,
+       which is what cancels yaw torque on a real X-quad. -->
+  <xacro:macro name="rotor_assembly" params="name angle spin">
+    <xacro:property name="ax" value="${arm_length * cos(angle)}"/>
+    <xacro:property name="ay" value="${arm_length * sin(angle)}"/>
+
+    <joint name="${name}_arm_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}_arm_link"/>
+      <origin xyz="${ax/2} ${ay/2} 0" rpy="0 ${pi/2} ${angle}"/>
+    </joint>
+    <link name="${name}_arm_link">
+      <visual>
+        <geometry><cylinder radius="${arm_radius}" length="${arm_length}"/></geometry>
+        <material name="gunmetal"/>
+      </visual>
+      <collision>
+        <geometry><cylinder radius="${arm_radius}" length="${arm_length}"/></geometry>
+      </collision>
+      <xacro:cylinder_inertial mass="${arm_mass}" radius="${arm_radius}" length="${arm_length}">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+    <!-- Motor can. -->
+    <joint name="${name}_motor_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}_motor_link"/>
+      <origin xyz="${ax} ${ay} 0.012" rpy="0 0 0"/>
+    </joint>
+    <link name="${name}_motor_link">
+      <visual>
+        <geometry><cylinder radius="0.017" length="0.030"/></geometry>
+        <material name="olive_drab"/>
+      </visual>
+      <xacro:cylinder_inertial mass="0.055" radius="0.017" length="0.030">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+    <joint name="${name}_rotor_joint" type="continuous">
+      <parent link="${name}_motor_link"/>
+      <child link="${name}_rotor_link"/>
+      <origin xyz="0 0 0.022" rpy="0 0 0"/>
+      <axis xyz="0 0 ${spin}"/>
+      <limit effort="4.0" velocity="1800.0"/>
+      <dynamics damping="0.0004"/>
+    </joint>
+    <link name="${name}_rotor_link">
+      <!-- Two blades rather than a disc, so the spin is actually visible. -->
+      <visual>
+        <origin xyz="${rotor_radius/2} 0 0"/>
+        <geometry><box size="${rotor_radius} 0.022 0.003"/></geometry>
+        <material name="antenna_white"/>
+      </visual>
+      <visual>
+        <origin xyz="${-rotor_radius/2} 0 0"/>
+        <geometry><box size="${rotor_radius} 0.022 0.003"/></geometry>
+        <material name="antenna_white"/>
+      </visual>
+      <visual>
+        <geometry><cylinder radius="0.013" length="0.008"/></geometry>
+        <material name="signal_red"/>
+      </visual>
+      <collision>
+        <geometry><cylinder radius="${rotor_radius}" length="0.004"/></geometry>
+      </collision>
+      <xacro:cylinder_inertial mass="${rotor_mass}" radius="${rotor_radius}" length="0.004">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+    <!-- Landing leg under each arm. -->
+    <joint name="${name}_leg_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}_leg_link"/>
+      <origin xyz="${ax * 0.55} ${ay * 0.55} ${-body_z/2 - 0.055}" rpy="0 0 0"/>
+    </joint>
+    <link name="${name}_leg_link">
+      <visual>
+        <geometry><cylinder radius="0.006" length="0.110"/></geometry>
+        <material name="matte_black"/>
+      </visual>
+      <collision>
+        <geometry><cylinder radius="0.006" length="0.110"/></geometry>
+      </collision>
+      <xacro:cylinder_inertial mass="0.018" radius="0.006" length="0.110">
+        <origin xyz="0 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+  </xacro:macro>
+
+  <xacro:rotor_assembly name="rotor_fl" angle="${arm_sweep}"          spin="1"/>
+  <xacro:rotor_assembly name="rotor_fr" angle="${-arm_sweep}"         spin="-1"/>
+  <xacro:rotor_assembly name="rotor_rl" angle="${pi - arm_sweep}"     spin="-1"/>
+  <xacro:rotor_assembly name="rotor_rr" angle="${pi + arm_sweep}"     spin="1"/>
+
+  <!-- ============================== gimbal =============================== -->
+  <!-- A 2-axis gimbal: the pan/tilt joints are real, so the confirm behaviour
+       can slew the sensor to a candidate instead of yawing the whole aircraft. -->
+  <joint name="gimbal_pan_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="gimbal_pan_link"/>
+    <origin xyz="${body_x/2 - 0.045} 0 ${-body_z/2 - 0.012}" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${-pi}" upper="${pi}" effort="1.2" velocity="3.5"/>
+    <dynamics damping="0.02"/>
+  </joint>
+  <link name="gimbal_pan_link">
+    <visual>
+      <geometry><cylinder radius="0.026" length="0.022"/></geometry>
+      <material name="gunmetal"/>
+    </visual>
+    <xacro:cylinder_inertial mass="0.045" radius="0.026" length="0.022">
+      <origin xyz="0 0 0"/>
+    </xacro:cylinder_inertial>
+  </link>
+  <joint name="gimbal_tilt_joint" type="revolute">
+    <parent link="gimbal_pan_link"/>
+    <child link="gimbal_tilt_link"/>
+    <origin xyz="0 0 -0.028" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <!-- Straight ahead to straight down. -->
+    <limit lower="0.0" upper="${pi/2}" effort="1.2" velocity="3.5"/>
+    <dynamics damping="0.02"/>
+  </joint>
+  <link name="gimbal_tilt_link">
+    <visual>
+      <geometry><box size="0.050 0.044 0.038"/></geometry>
+      <material name="matte_black"/>
+    </visual>
+    <xacro:box_inertial mass="0.075" x="0.050" y="0.044" z="0.038">
+      <origin xyz="0 0 0"/>
+    </xacro:box_inertial>
+  </link>
+  <!-- ============================== sensors ============================== -->
+  <!-- Wide-angle EO on the gimbal: the area-search sensor. -->
+  <xacro:camera_rgb prefix="eo_camera" parent="gimbal_tilt_link"
+                    xyz="0.026 0 0" hfov="1.7453" width="640" height="480" rate="15.0"/>
+
+  <!-- Narrow LWIR, co-boresighted: the confirm/BDA sensor. -->
+  <xacro:camera_thermal prefix="lwir" parent="gimbal_tilt_link"
+                        xyz="0.020 0.034 0" width="320" height="256" rate="9.0"/>
+
+  <!-- Downward scanner for AGL height and rooftop clearance. -->
+  <xacro:lidar_2d prefix="agl" parent="base_link"
+                  xyz="0 0 ${-body_z/2 - 0.012}" rpy="0 ${pi/2} 0"
+                  samples="36" range_max="60.0" rate="20.0"
+                  min_angle="${-0.26}" max_angle="${0.26}"/>
+
+  <xacro:imu_sensor prefix="imu" parent="base_link" xyz="0 0 0.01" rate="200.0"/>
+
+  <xacro:gnss_sensor prefix="gnss" parent="base_link"
+                     xyz="-0.06 0 ${body_z/2 + 0.008}" noise="0.6"/>
+
+  <!-- Airborne DF: a short baseline, so individually imprecise, but the
+       altitude buys clean line of sight. The localiser weights it accordingly. -->
+  <xacro:rf_df_array prefix="rf_df" parent="base_link"
+                     xyz="-0.075 0 ${-body_z/2 - 0.006}"
+                     elements="3" baseline="0.085" mast="0.090"
+                     band_mhz="433.0" sensitivity_dbm="-104.0"/>
+
+  <!-- ============================== plugins ============================== -->
+</robot>

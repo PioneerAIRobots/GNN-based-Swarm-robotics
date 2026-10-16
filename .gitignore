@@ -1,0 +1,21 @@
+# colcon workspace artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Stray per-package colcon output, from running colcon inside a package dir
+ros2_ws/src/*/build/
+ros2_ws/src/*/install/
+ros2_ws/src/*/log/
+
+__pycache__/
+*.py[cod]
+
+# The trained allocator ships: the mission runs on it out of the box, and
+# regenerating it takes ~10 minutes. It is 3 MB, well inside what git handles
+# comfortably. Training curves are build output and are not versioned.
+ros2_ws/src/swarm_gnn/checkpoints/*.json
+
+# Recorded mission data is an intermediate; docs/media is generated from it by
+# tools/render_media.py and IS versioned, because the README embeds it.
+*.jsonl

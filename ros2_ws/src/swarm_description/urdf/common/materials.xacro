@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Shared material palette.
+
+       RViz colours a link from the <material> inside its <visual>, so that is
+       all these are. The simulation is RViz-only: `kinematic_platform` moves
+       the robots and `swarm_viz` draws the sector they move through. -->
+
+  <material name="olive_drab"><color rgba="0.26 0.29 0.18 1.0"/></material>
+  <material name="coyote_tan"><color rgba="0.52 0.45 0.33 1.0"/></material>
+  <material name="gunmetal"><color rgba="0.16 0.18 0.20 1.0"/></material>
+  <material name="matte_black"><color rgba="0.07 0.07 0.08 1.0"/></material>
+  <material name="sensor_glass"><color rgba="0.10 0.35 0.45 0.85"/></material>
+  <material name="hazard_amber"><color rgba="0.90 0.60 0.05 1.0"/></material>
+  <material name="signal_red"><color rgba="0.75 0.10 0.10 1.0"/></material>
+  <material name="antenna_white"><color rgba="0.88 0.88 0.85 1.0"/></material>
+</robot>
