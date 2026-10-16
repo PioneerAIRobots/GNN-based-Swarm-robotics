@@ -10,10 +10,13 @@ algorithm**. Built on **ROS 2 Humble**, visualised in **RViz**.
 
 ## Watch it run
 
-[![Watch the walkthrough](docs/media/video_poster.png)](drones_GNN.mp4)
+[![Watch the walkthrough](docs/media/video_poster.png)](https://github.com/PioneerAIRobots/GNN-based-Swarm-robotics/raw/main/drones_GNN.mp4)
 
-**▶ [drones_GNN.mp4](drones_GNN.mp4)** — full walkthrough in RViz (21 MB).
-Click the image above, or the link, to play it on GitHub.
+**▶ [drones_GNN.mp4](https://github.com/PioneerAIRobots/GNN-based-Swarm-robotics/raw/main/drones_GNN.mp4)**
+— full walkthrough in RViz. 21 MB; GitHub will not preview a file this large,
+so the link downloads it rather than streaming it.
+
+The animation below needs no download and shows the same mission.
 
 ### Mission replay
 
